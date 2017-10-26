@@ -20,13 +20,13 @@ class Simplex
 {
 public:
     Simplex();
-    void print(string);
+    void print();
     void read(string);
     void pivot_on(int, int);
     int find_pivot_column();
     int find_pivot_row(int);
     int find_basis_variable(int);
-    void print_optimal_vector(string);
+    void print_optimal_vector();
     void solve();
 private:
     string type;

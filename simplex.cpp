@@ -18,29 +18,19 @@ Simplex::Simplex()
 {
 }
 
-void Simplex::print(string msg)
+void Simplex::print()
 {
     static int counter = 0;
     int i, j;
     cout << endl;
-    cout << ++counter << ". Tableau " << msg << ":" << endl;
-    for (i = 1; i < n; i++)
-        cout << "    x" << i << ",";
-    cout << endl;
+    nl(70);
+    cout << counter++ << "." << endl;
     for (i = 0; i < m; i++) {
-        if (i == 0)
-            cout << type;
-        else
-            cout << "b" << i << ": ";
         for (j = 0; j < n; j++) {
-            if (equal((int) mat[i][j], mat[i][j]))
-                cout << setw(7) << right << mat[i][j];
-            else
-                cout << setw(7) << right << mat[i][j];
+            cout << setw(8) << right << mat[i][j] << " ";
         }
         cout << endl;
     }
-    nl(70);
 }
 
 /*
@@ -66,7 +56,7 @@ void Simplex::read(string filename)
         exit(1);
     }
 
-    int i, j;
+    int i, j, n0;
     size_t pos;
     string line, token;
 
@@ -75,6 +65,7 @@ void Simplex::read(string filename)
     pos = line.find(" ");
     type = line.substr(0, pos);
     line = line.substr(line.find("=") + 2);
+
     // objective coefficient
     for (j = 1; (pos = line.find(" ")) != string::npos; ) {
         token = line.substr(0, pos);
@@ -86,18 +77,20 @@ void Simplex::read(string filename)
     }
     token = line.substr(0, line.find("x"));
     mat[0][j++] = -atof(token.c_str());
+    n0 = j;
     n = j;
+
     // constraint coefficient
     for (i = 1; getline(infile, line); i++) {
         for (j = 1; (pos = line.find(" ")) != string::npos; ) {
             token = line.substr(0, pos);
             if (!token.compare("=")) {          // add slack, artificial
                 mat[i][n] = 1;
-                mat[0][n++] = -M;
+                mat[0][n++] = M;
             } else if (!token.compare(">=")) {  // add slack, artificial, surplus
                 mat[i][n++] = -1;
                 mat[i][n] = 1;
-                mat[0][n++] = -M;
+                mat[0][n++] = M;
             } else if (!token.compare("<=")) {  // add slack
                 mat[i][n++] = 1;
             } else if (token.compare("+")) {
@@ -109,16 +102,18 @@ void Simplex::read(string filename)
         mat[i][0] = atof(line.substr(0, line.find("x")).c_str());
     }
     m = i;
+
     // objective change
     if (!type.compare("min")) {
-        for (j = 1; j < n; j++) {
+        for (j = 1; j < n0; j++) {
             mat[0][j] = -mat[0][j];
         }
     }
+
     // eliminate artificial
     int eq[ROW];
     int count = 0;
-    for (j = 1; j < n; j++) {
+    for (j = 1; j < n; j++) { // find big M rows
         if (mat[0][j] == M || mat[0][j] == -M) {
             for (i = 1; i < m; i++) {
                 if (mat[i][j]) {
@@ -128,13 +123,15 @@ void Simplex::read(string filename)
             }
         }
     }
-    for (i = 0; i < count; i++) {
+    for (i = 0; i < count; i++) { // row operation
         for (j = 0; j < n; j++) {
             mat[0][j] -= M * mat[eq[i]][j];
         }
     }
 
-    cout << "Read tableau [" << m << " rows x " << n << " columns] from file '" << filename << "'." << endl;
+    cout << "file: " << filename << endl;
+    cout << "row: " << m << endl;
+    cout << "col: " << n << endl;
     infile.close();
 }
 
@@ -149,40 +146,42 @@ void Simplex::pivot_on(int row, int col)
         mat[row][j] /= pivot;
     assert(equal(mat[row][col], 1));
     
-    for (i = 0; i < m; i++) { // foreach remaining row i do 
+    for (i = 0; i < m; i++) { // elementary row operation
         double multiplier = mat[i][col];
         if (i == row)
             continue;
-        for (j = 0; j < n; j++) { // r[i] = r[i] - z * r[row];
+        for (j = 0; j < n; j++) {
             mat[i][j] -= multiplier * mat[row][j];
         }
     }
 }
 
-// Find pivot_col = most negative column in mat[0][1..n]
+// most negative column in row[0]
 int Simplex::find_pivot_column()
 {
     int j, pivot_col = 1;
     double lowest = mat[0][pivot_col];
+
     for (j = 1; j < n; j++) {
         if (mat[0][j] < lowest) {
             lowest = mat[0][j];
             pivot_col = j;
         }
     }
-    cout << "Most negative column in row[0] is col " << pivot_col << " = " << lowest << "." << endl;
-    if (lowest >= 0) {
-        return -1; // All positive columns in row[0], this is optimal.
+    cout << "pivot col: " << pivot_col << " = " << lowest << endl;
+
+    if (lowest >= 0) { // optimality test
+        return -1; // every coefficient in row[0] is nonnegative
     }
     return pivot_col;
 }
 
-// Find the pivot_row, with smallest positive ratio = col[0] / col[pivot]
+// minimum ratio test: col[0]/col[row]
 int Simplex::find_pivot_row(int pivot_col)
 {
     int i, pivot_row = 0;
     double min_ratio = -1;
-    cout << "Ratios A[row_i,0]/A[row_i," << pivot_col << "] = [";
+    cout << "min{";
     for (i = 1; i < m; i++) {
         double ratio = mat[i][0] / mat[i][pivot_col];
         cout << ratio << ", ";
@@ -191,12 +190,10 @@ int Simplex::find_pivot_row(int pivot_col)
             pivot_row = i;
         }
     }
-    cout << "]." << endl;
+    cout << "}" << endl;
     if (min_ratio == -1)
-        return -1; // Unbounded.
-    cout << "Found pivot A[" << pivot_row << "," << pivot_col;
-    cout << "], min positive ratio=" << min_ratio;
-    cout << " in row=" << pivot_row << "." << endl;
+        return -1; // unbounded z
+    cout << "pivot row: " << pivot_row << endl;
     return pivot_row;
 }
 
@@ -204,11 +201,11 @@ int Simplex::find_pivot_row(int pivot_col)
 // return -1, if the column as not from an identity matrix.
 int Simplex::find_basis_variable(int col)
 {
-    int i, xi=-1;
+    int i, xi = -1;
     for (i = 1; i < m; i++) {
         if (equal(mat[i][col], 1)) {
             if (xi == -1)
-                xi=i;   // found first '1', save this row number.
+                xi = i;   // found first '1', save this row number.
             else
                 return -1; // found second '1', not an identity matrix.
         } else if (!equal(mat[i][col], 0)) {
@@ -218,16 +215,15 @@ int Simplex::find_basis_variable(int col)
     return xi;
 }
 
-void Simplex::print_optimal_vector(string msg)
+void Simplex::print_optimal_vector()
 {
     int j, xi;
-    cout << msg << " at ";
-    for (j = 1; j < n; j++) { // for each column.
+    for (j = 1; j < n; j++) { // for each column
         xi = find_basis_variable(j);
         if (xi != -1)
-            cout << "x" << j << "=" << mat[xi][0] << ", ";
+            cout << "x" << j << " = " << mat[xi][0] << ", ";
         else
-            cout << "x" << j << "=0, ";
+            cout << "x" << j << " = 0, ";
     }
     cout << endl;
 }
@@ -240,25 +236,25 @@ void Simplex::solve()
         
         pivot_col = find_pivot_column();
         if (pivot_col < 0) {
-            cout << "Found optimal value=A[0,0]=" << mat[0][0] << " (no negatives in row 0)." << endl;
-            print_optimal_vector("Optimal vector");
+            if (!type.compare("min"))
+                mat[0][0] *= -1;
+            cout << "optimal solution z = " << mat[0][0] << endl;
+            print_optimal_vector();
             break;
         }
-        cout << "Entering variable x" << pivot_col << " to be made basic, so pivot_col=" << pivot_col << "." << endl;
         
         pivot_row = find_pivot_row(pivot_col);
         if (pivot_row < 0) {
-            cout << "unbounded (no pivot_row)." << endl;
+            cout << "unbounded z" << endl;
             break;
         }
-        cout << "Leaving variable x" << pivot_row << ", so pivot_row=" << pivot_row << endl;
         
         pivot_on(pivot_row, pivot_col);
-        print("After pivoting");
-        print_optimal_vector("Basic feasible solution");
+        print();
+        print_optimal_vector();
         
         if(loop > 20) {
-            cout << "Too many iterations > " << loop << "." << endl;
+            cout << "iterations > " << loop << endl;
             break;
         }
     }
@@ -270,7 +266,7 @@ int main(int argc, char *argv[])
     if (argc > 1) { // usage: cmd datafile
         simplex.read(argv[1]);
     }
-    simplex.print("Initial");
+    simplex.print();
     simplex.solve();
     return 0;
 } 
