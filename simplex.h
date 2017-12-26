@@ -1,6 +1,6 @@
 #ifndef SIMPLEX_H
 #define SIMPLEX_H
-#define M 1000
+#define M 1000000
 #define ROW 100
 #define COL 100
 

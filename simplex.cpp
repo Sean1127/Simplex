@@ -13,7 +13,6 @@ void nl(int k)
     cout << endl;
 }
 
-
 Simplex::Simplex()
 {
 }
